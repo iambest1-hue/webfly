@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "developer": { "name": "iambest1" },
+  "name": "飞雷神 - 视频弹出播放",
+  "version": "1.1.0",
+  "author": "iambest1",
+  "description": "飞雷神之术！点击右侧常驻按钮，即可将视频标签页瞬间移动到独立窗口播放，支持双向切换和状态保持",
+  "permissions": ["storage", "system.display", "tabs"],
+  "host_permissions": ["<all_urls>"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end",
+      "all_frames": true
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "飞雷神 - 视频弹出播放",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
