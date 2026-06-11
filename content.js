@@ -16,7 +16,6 @@ function createSidebarButton() {
     border: '2px solid rgba(255,255,255,0.12)', cursor: 'pointer',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     transition: 'opacity 0.2s ease, transform 0.2s ease, background 0.2s',
-    backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
     transform: 'scale(0.9)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
     right: '16px', top: '50%', marginTop: '-20px',
   });
@@ -79,7 +78,6 @@ function createVideoOverlay(video) {
     border: '2px solid rgba(255,255,255,0.12)', cursor: 'pointer',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     transition: 'opacity 0.15s ease, transform 0.15s ease',
-    backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
     opacity: '0', pointerEvents: 'none', transform: 'scale(0.85)',
     boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
   });
@@ -162,18 +160,36 @@ function createVideoOverlay(video) {
     requestAnimationFrame(updatePos);
   });
 
-  window.addEventListener('scroll', updatePos, { passive: true });
-  window.addEventListener('resize', updatePos, { passive: true });
+  let posRafId = null;
+  function throttledUpdatePos() {
+    if (!posRafId) {
+      posRafId = requestAnimationFrame(() => { posRafId = null; updatePos(); });
+    }
+  }
+  window.addEventListener('scroll', throttledUpdatePos, { passive: true });
+  window.addEventListener('resize', throttledUpdatePos, { passive: true });
 }
 
 function initVideoOverlays() {
   document.querySelectorAll('video').forEach(createVideoOverlay);
+  let moRafId = null;
+  const pendingNodes = [];
   new MutationObserver((mutations) => {
     for (const m of mutations) {
       for (const node of m.addedNodes) {
-        if (node.nodeName === 'VIDEO') createVideoOverlay(node);
-        if (node.querySelectorAll) node.querySelectorAll('video').forEach(createVideoOverlay);
+        if (node.nodeType !== 1) continue;
+        if (node.nodeName === 'VIDEO') { createVideoOverlay(node); continue; }
+        if (node.children && node.children.length > 0) pendingNodes.push(node);
       }
+    }
+    if (pendingNodes.length && !moRafId) {
+      moRafId = requestAnimationFrame(() => {
+        moRafId = null;
+        const nodes = pendingNodes.splice(0);
+        for (const node of nodes) {
+          if (node.isConnected) node.querySelectorAll('video').forEach(createVideoOverlay);
+        }
+      });
     }
   }).observe(document.body, { childList: true, subtree: true });
 }
