@@ -1,5 +1,6 @@
 let sidebarBtn = null;
 let sidebarIsReturn = false;
+let videoIsolateState = { active: false, video: null };
 
 const SVG_POPUP = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M19 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h6"/></svg>`;
 const SVG_RETURN = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V3m0 4h4M3 7l3-3a7 7 0 0 1 11 5M21 17v4m0-4h-4m4 0-3 3a7 7 0 0 1-11-5"/></svg>`;
@@ -38,6 +39,8 @@ function setSidebarReturnMode() {
 function setSidebarPopupMode() {
   sidebarIsReturn = false;
   updateOverlayButtonIcons();
+  exitSiteFullscreen();
+  videoIsolateState = { active: false, video: null };
   if (!sidebarBtn) return;
   sidebarBtn.innerHTML = SVG_POPUP;
   sidebarBtn.title = '飞雷神 · 弹出窗口播放';
@@ -60,6 +63,73 @@ function handleSidebarClick() {
   } else {
     setSidebarReturnMode();
     chrome.runtime.sendMessage({ action: 'detachTab' });
+  }
+}
+
+// ===== 视频浮层专用：弹出视频到异屏全屏 =====
+function handleVideoPopout(video) {
+  videoIsolateState = { active: true, video };
+  setSidebarReturnMode();
+  chrome.runtime.sendMessage({ action: 'detachTab', fullscreen: true });
+  // 等标签页移到新窗口 + 浏览器窗口全屏后再触发站点原生全屏
+  setTimeout(() => triggerSiteFullscreen(video), 800);
+}
+
+const FS_BTN_SELECTORS = [
+  '.bpx-player-ctrl-full',              // B站 bpx 播放器
+  '.bilibili-player-video-btn-fullscreen',
+  '.ytp-fullscreen-button',             // YouTube
+  '.vjs-fullscreen-control',            // video.js
+  '.dplayer-full-icon',                 // DPlayer
+  'button[aria-label*="全屏"]',
+  'button[aria-label*="Full screen"]',
+  'button[aria-label*="Fullscreen"]',
+  'button[title*="全屏"]',
+  'button[title*="Full screen"]',
+];
+
+function triggerSiteFullscreen(video) {
+  // 找播放器根容器（video + 弹幕 + 控件的共同祖先）
+  let container = video;
+  for (let i = 0; i < 6; i++) {
+    if (!container.parentElement || container.parentElement === document.body) break;
+    container = container.parentElement;
+  }
+
+  // 在容器内查找站点的全屏按钮
+  for (const sel of FS_BTN_SELECTORS) {
+    try {
+      const btn = container.querySelector(sel);
+      if (btn) {
+        btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        return;
+      }
+    } catch (e) { /* 选择器不合法，跳过 */ }
+  }
+
+  // 找不到按钮时 fallback：Fullscreen API 全屏
+  try { container.requestFullscreen(); } catch (e) {
+    try { video.requestFullscreen(); } catch (e2) {}
+  }
+}
+
+function exitSiteFullscreen() {
+  // 双保险退出全屏
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  // 尝试再次点击全屏按钮 toggle 退出（用于纯 CSS 全屏）
+  const video = videoIsolateState.video;
+  if (video) {
+    let container = video;
+    for (let i = 0; i < 6; i++) {
+      if (!container.parentElement || container.parentElement === document.body) break;
+      container = container.parentElement;
+    }
+    for (const sel of FS_BTN_SELECTORS) {
+      try {
+        const btn = container.querySelector(sel);
+        if (btn) { btn.dispatchEvent(new MouseEvent('click', { bubbles: true })); return; }
+      } catch (e) {}
+    }
   }
 }
 
@@ -151,7 +221,11 @@ function createVideoOverlay(video) {
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     e.preventDefault();
-    handleSidebarClick();
+    if (sidebarIsReturn) {
+      handleSidebarClick();
+    } else {
+      handleVideoPopout(video);
+    }
   });
 
   // 全屏切换时重新挂载按钮并更新位置

@@ -1,6 +1,6 @@
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'detachTab') {
-    detachToOtherScreen(sender.tab.id, sender.tab.windowId);
+    detachToOtherScreen(sender.tab.id, sender.tab.windowId, message.fullscreen);
     sendResponse({ ok: true });
     return true;
   }
@@ -19,7 +19,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-async function detachToOtherScreen(tabId, sourceWinId) {
+async function detachToOtherScreen(tabId, sourceWinId, fullscreen = false) {
   // 1. 保存 tab 信息（用于重建兜底）
   const tab = await chrome.tabs.get(tabId);
   const store = { originWinId: sourceWinId, url: tab.url || '', pinned: tab.pinned, index: tab.index };
@@ -32,15 +32,20 @@ async function detachToOtherScreen(tabId, sourceWinId) {
   const targetDisplay = displays.find(d => d.id !== sourceDisplay.id) || sourceDisplay;
   const { left, top, width, height } = targetDisplay.workArea;
 
-  // 3. 创建新窗口 + 移入标签页，然后最大化
-  chrome.windows.create({
-    tabId: tabId,
-    type: 'normal',
-    left, top,
-    focused: true,
-  }, (win) => {
-    chrome.windows.update(win.id, { state: 'maximized' });
-  });
+  // 3. 创建新窗口 + 移入标签页，然后全屏/最大化
+  try {
+    const win = await chrome.windows.create({
+      tabId: tabId,
+      type: 'normal',
+      left, top,
+      focused: true,
+    });
+    // 等待窗口就绪后再设置 state，提高兼容性
+    await new Promise(r => setTimeout(r, 150));
+    await chrome.windows.update(win.id, { state: fullscreen ? 'fullscreen' : 'maximized' });
+  } catch (e) {
+    console.warn('detachToOtherScreen error:', e);
+  }
 }
 
 async function returnToOriginAndClose(tabId, currentWinId) {
@@ -53,6 +58,8 @@ async function returnToOriginAndClose(tabId, currentWinId) {
   // 将标签页移回原窗口
   try {
     await chrome.windows.get(info.originWinId);
+    // 退出全屏后再移动标签页
+    try { await chrome.windows.update(currentWinId, { state: 'normal' }); } catch (e) {}
     // 原窗口还在：把 tab 移回去
     await chrome.tabs.move(tabId, { windowId: info.originWinId, index: info.index });
     await chrome.tabs.update(tabId, { pinned: info.pinned, active: true });
