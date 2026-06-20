@@ -81,3 +81,11 @@
 - 权限：`storage`（状态存储）、`system.display`（多显示器检测）、`tabs`（标签页管理）
 - 内容脚本注入所有页面（`all_frames: true`）
 - 全屏采用窗口级全屏 `chrome.windows.update({state: 'fullscreen'})` + 站点原生 Fullscreen API 的组合方案
+
+## 赞助
+
+如果这个扩展对你有帮助，欢迎请作者喝杯咖啡 ❤️
+
+| 微信 | 支付宝 |
+|------|--------|
+| ![微信](assets/wechat-pay.png) | ![支付宝](assets/alipay.png) |
