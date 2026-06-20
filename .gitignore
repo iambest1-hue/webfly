@@ -1,1 +1,18 @@
 .claude/
+
+# Build artifacts
+*.zip
+*.crx
+*.xpi
+
+# OS files
+Thumbs.db
+.DS_Store
+Desktop.ini
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
